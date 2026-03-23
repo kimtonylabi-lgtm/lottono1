@@ -1,49 +1,37 @@
 import { Draw } from "./types";
 import { getDb } from "./firebase";
 
-const COLLECTION = "draws";
-const BATCH_SIZE = 500;
+const DOC_PATH = "lotto/draws";
 
 export async function loadDraws(): Promise<Draw[]> {
   const db = getDb();
-  const snapshot = await db
-    .collection(COLLECTION)
-    .orderBy("round", "asc")
-    .get();
+  const doc = await db.doc(DOC_PATH).get();
 
-  return snapshot.docs.map((doc) => doc.data() as Draw);
+  if (!doc.exists) return [];
+
+  const data = doc.data();
+  return (data?.items as Draw[]) || [];
 }
 
 export async function getLastRound(): Promise<number> {
-  const db = getDb();
-  const snapshot = await db
-    .collection(COLLECTION)
-    .orderBy("round", "desc")
-    .limit(1)
-    .get();
-
-  if (snapshot.empty) return 0;
-  return (snapshot.docs[0].data() as Draw).round;
+  const draws = await loadDraws();
+  if (draws.length === 0) return 0;
+  return draws[draws.length - 1].round;
 }
 
-export async function saveDraws(draws: Draw[]): Promise<number> {
-  let added = 0;
-
+export async function saveDraws(newDraws: Draw[]): Promise<number> {
   const db = getDb();
+  const existing = await loadDraws();
 
-  // Firestore batch write (max 500 per batch)
-  for (let i = 0; i < draws.length; i += BATCH_SIZE) {
-    const batch = db.batch();
-    const chunk = draws.slice(i, i + BATCH_SIZE);
+  // Merge
+  const map = new Map<number, Draw>();
+  for (const d of existing) map.set(d.round, d);
+  for (const d of newDraws) map.set(d.round, d);
 
-    for (const draw of chunk) {
-      const ref = db.collection(COLLECTION).doc(String(draw.round));
-      batch.set(ref, draw);
-      added++;
-    }
+  const merged = Array.from(map.values()).sort((a, b) => a.round - b.round);
+  const added = merged.length - existing.length;
 
-    await batch.commit();
-  }
+  await db.doc(DOC_PATH).set({ items: merged });
 
   return added;
 }
