@@ -3,6 +3,8 @@ import { loadDraws } from "@/lib/crawler";
 import { analyze } from "@/lib/analyzer";
 import { recommend } from "@/lib/recommender";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const draws = await loadDraws();
