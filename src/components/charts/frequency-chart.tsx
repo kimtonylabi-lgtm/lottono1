@@ -32,8 +32,8 @@ export default function FrequencyChart({ stats }: FrequencyChartProps) {
     }));
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-      <h2 className="text-lg font-bold text-gray-800 mb-4">
+    <div className="bg-[var(--color-card)] rounded-2xl shadow-lg p-6 border border-[var(--color-card-border)] animate-slide-up">
+      <h2 className="text-lg font-bold text-[var(--color-foreground)] mb-4">
         번호별 출현 빈도
       </h2>
       <div className="h-64">

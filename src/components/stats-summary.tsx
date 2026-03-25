@@ -33,15 +33,15 @@ export default function StatsSummary({ analysis }: StatsSummaryProps) {
   ];
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-      <h2 className="text-lg font-bold text-gray-800 mb-4">
+    <div className="bg-[var(--color-card)] rounded-2xl shadow-lg p-6 border border-[var(--color-card-border)] animate-slide-up">
+      <h2 className="text-lg font-bold text-[var(--color-foreground)] mb-4">
         분석 요약
       </h2>
       <div className="grid grid-cols-2 gap-4">
         {stats.map((stat) => (
-          <div key={stat.label} className="text-center p-3 bg-gray-50 rounded-xl">
-            <p className="text-xs text-gray-500 mb-1">{stat.label}</p>
-            <p className="text-sm font-bold text-gray-800">{stat.value}</p>
+          <div key={stat.label} className="text-center p-3 bg-[var(--color-surface)] rounded-xl">
+            <p className="text-xs text-[var(--color-muted)] mb-1">{stat.label}</p>
+            <p className="text-sm font-bold text-[var(--color-foreground)]">{stat.value}</p>
           </div>
         ))}
       </div>

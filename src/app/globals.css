@@ -3,12 +3,52 @@
 @theme inline {
   --color-background: #f9fafb;
   --color-foreground: #171717;
+  --color-card: #ffffff;
+  --color-card-border: #f3f4f6;
+  --color-muted: #6b7280;
+  --color-muted-light: #9ca3af;
+  --color-surface: #f3f4f6;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --animate-fade-in: fade-in 0.4s ease-out both;
+  --animate-slide-up: slide-up 0.4s ease-out both;
+  --animate-scale-in: scale-in 0.3s ease-out both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Dark mode */
+.dark {
+  --color-background: #111827;
+  --color-foreground: #f3f4f6;
+  --color-card: #1f2937;
+  --color-card-border: #374151;
+  --color-muted: #9ca3af;
+  --color-muted-light: #6b7280;
+  --color-surface: #374151;
+}
+
+.dark body,
+.dark {
+  color-scheme: dark;
 }

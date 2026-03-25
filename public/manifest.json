@@ -1,0 +1,17 @@
+{
+  "name": "로또 분석기 - AI 번호 추천",
+  "short_name": "로또분석",
+  "description": "AI 기반 로또 번호 분석 및 추천",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}

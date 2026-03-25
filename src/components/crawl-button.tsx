@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface CrawlButtonProps {
   lastRound: number;
 }
 
 export default function CrawlButton({ lastRound }: CrawlButtonProps) {
+  const router = useRouter();
   const [status, setStatus] = useState<"idle" | "crawling" | "done" | "error">("idle");
   const [result, setResult] = useState("");
 
@@ -26,8 +28,8 @@ export default function CrawlButton({ lastRound }: CrawlButtonProps) {
       }
 
       setStatus("done");
-      setResult(`${data.added}개 회차 수집 완료! 새로고침합니다...`);
-      setTimeout(() => window.location.reload(), 1500);
+      setResult(`${data.added}개 회차 수집 완료!`);
+      router.refresh();
     } catch (error) {
       setStatus("error");
       setResult(`오류 발생: ${error}`);
@@ -48,7 +50,7 @@ export default function CrawlButton({ lastRound }: CrawlButtonProps) {
       {status === "crawling" && (
         <div>
           <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
-          <p className="text-sm text-gray-600">lottoen.com에서 데이터 수집 중...</p>
+          <p className="text-sm text-[var(--color-muted)]">lottoen.com에서 데이터 수집 중...</p>
         </div>
       )}
 

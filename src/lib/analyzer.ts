@@ -1,4 +1,14 @@
-import { Draw, NumberStats, AnalysisResult } from "./types";
+import {
+  Draw,
+  NumberStats,
+  AnalysisResult,
+  ExtendedAnalysis,
+  BonusStats,
+  GapAnalysis,
+  SumAnalysis,
+  CoOccurrence,
+  ConsecutivePairStats,
+} from "./types";
 
 const TOTAL_NUMBERS = 45;
 const RECENT_ROUNDS = 50;
@@ -105,5 +115,147 @@ export function analyze(draws: Draw[]): AnalysisResult {
     totalDraws: sorted.length,
     latestRound,
     analyzedAt: new Date().toISOString(),
+  };
+}
+
+export function analyzeExtended(draws: Draw[]): ExtendedAnalysis {
+  const base = analyze(draws);
+  const sorted = [...draws].sort((a, b) => a.round - b.round);
+  const latestRound = base.latestRound;
+
+  // Bonus number analysis
+  const bonusFreq = new Array(TOTAL_NUMBERS + 1).fill(0);
+  const lastBonusAppeared = new Array(TOTAL_NUMBERS + 1).fill(0);
+  for (const draw of sorted) {
+    bonusFreq[draw.bonus]++;
+    lastBonusAppeared[draw.bonus] = draw.round;
+  }
+  const bonusStats: BonusStats[] = [];
+  for (let n = 1; n <= TOTAL_NUMBERS; n++) {
+    bonusStats.push({
+      number: n,
+      bonusFrequency: bonusFreq[n],
+      lastBonusAppeared: lastBonusAppeared[n],
+    });
+  }
+
+  // Gap analysis — track intervals between appearances for each number
+  const appearances: number[][] = Array.from({ length: TOTAL_NUMBERS + 1 }, () => []);
+  for (const draw of sorted) {
+    for (const n of draw.numbers) {
+      appearances[n].push(draw.round);
+    }
+  }
+  const gapAnalysis: GapAnalysis[] = [];
+  for (let n = 1; n <= TOTAL_NUMBERS; n++) {
+    const apps = appearances[n];
+    if (apps.length < 2) {
+      gapAnalysis.push({
+        number: n,
+        averageGap: 0,
+        currentGap: latestRound - (apps[0] ?? 0),
+        maxGap: 0,
+        minGap: 0,
+        gapTrend: "stable",
+      });
+      continue;
+    }
+    const gaps: number[] = [];
+    for (let i = 1; i < apps.length; i++) {
+      gaps.push(apps[i] - apps[i - 1]);
+    }
+    const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+    const currentGap = latestRound - apps[apps.length - 1];
+
+    // Trend: compare last 5 gaps vs previous 5
+    let trend: "increasing" | "decreasing" | "stable" = "stable";
+    if (gaps.length >= 10) {
+      const recent5 = gaps.slice(-5).reduce((s, g) => s + g, 0) / 5;
+      const prev5 = gaps.slice(-10, -5).reduce((s, g) => s + g, 0) / 5;
+      if (recent5 > prev5 * 1.2) trend = "increasing";
+      else if (recent5 < prev5 * 0.8) trend = "decreasing";
+    }
+
+    gapAnalysis.push({
+      number: n,
+      averageGap: Math.round(avgGap * 10) / 10,
+      currentGap,
+      maxGap: Math.max(...gaps),
+      minGap: Math.min(...gaps),
+      gapTrend: trend,
+    });
+  }
+
+  // Sum analysis — sum of 6 numbers per draw
+  const sums = sorted.map((d) => d.numbers.reduce((s, n) => s + n, 0));
+  const sumDist: Record<string, number> = {};
+  for (const sum of sums) {
+    const rangeStart = Math.floor(sum / 20) * 20 + 1;
+    const rangeEnd = rangeStart + 19;
+    const key = `${rangeStart}-${rangeEnd}`;
+    sumDist[key] = (sumDist[key] || 0) + 1;
+  }
+  let mostFreqRange = "";
+  let mostFreqCount = 0;
+  for (const [key, count] of Object.entries(sumDist)) {
+    if (count > mostFreqCount) {
+      mostFreqCount = count;
+      mostFreqRange = key;
+    }
+  }
+  const sumAnalysis: SumAnalysis = {
+    averageSum: Math.round(sums.reduce((s, v) => s + v, 0) / sums.length),
+    minSum: Math.min(...sums),
+    maxSum: Math.max(...sums),
+    mostFrequentRange: mostFreqRange,
+    sumDistribution: sumDist,
+  };
+
+  // Co-occurrence analysis — count pairs appearing together
+  const pairCounts = new Map<string, number>();
+  for (const draw of sorted) {
+    const nums = draw.numbers;
+    for (let i = 0; i < nums.length; i++) {
+      for (let j = i + 1; j < nums.length; j++) {
+        const a = Math.min(nums[i], nums[j]);
+        const b = Math.max(nums[i], nums[j]);
+        const key = `${a}-${b}`;
+        pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
+      }
+    }
+  }
+  const topCoOccurrences: CoOccurrence[] = Array.from(pairCounts.entries())
+    .map(([key, count]) => {
+      const [a, b] = key.split("-").map(Number);
+      return { pair: [a, b] as [number, number], count, probability: count / sorted.length };
+    })
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
+
+  // Consecutive pair frequency
+  const consecutiveMap = new Map<string, number>();
+  for (const draw of sorted) {
+    const nums = [...draw.numbers].sort((a, b) => a - b);
+    for (let i = 0; i < nums.length - 1; i++) {
+      if (nums[i + 1] - nums[i] === 1) {
+        const key = `${nums[i]}-${nums[i + 1]}`;
+        consecutiveMap.set(key, (consecutiveMap.get(key) || 0) + 1);
+      }
+    }
+  }
+  const consecutivePairs: ConsecutivePairStats[] = Array.from(consecutiveMap.entries())
+    .map(([key, frequency]) => {
+      const [a, b] = key.split("-").map(Number);
+      return { pair: [a, b] as [number, number], frequency };
+    })
+    .sort((a, b) => b.frequency - a.frequency);
+
+  return {
+    ...base,
+    bonusStats,
+    gapAnalysis,
+    sumAnalysis,
+    topCoOccurrences,
+    consecutivePairs,
   };
 }

@@ -13,8 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lotto Analyzer",
-  description: "AI based lotto number recommendation",
+  title: "로또 분석기 - AI 번호 추천",
+  description: "1,200회차 이상의 당첨 데이터 기반 AI 로또 번호 분석 및 추천",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "로또분석",
+  },
 };
 
 export const viewport: Viewport = {
@@ -32,8 +38,11 @@ export default function RootLayout({
     <html
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-gray-50">{children}</body>
+      <body className="min-h-full flex flex-col bg-[var(--color-background)]">
+        {children}
+      </body>
     </html>
   );
 }

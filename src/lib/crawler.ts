@@ -1,6 +1,6 @@
-import { Draw, AnalysisResult } from "./types";
+import { Draw, ExtendedAnalysis } from "./types";
 import { getDb } from "./firebase";
-import { analyze } from "./analyzer";
+import { analyzeExtended } from "./analyzer";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
@@ -8,7 +8,7 @@ const DRAWS_DOC = "lotto/draws";
 const CACHE_DOC = "lotto/cache";
 
 interface CachedData {
-  analysis: AnalysisResult;
+  analysis: ExtendedAnalysis;
   lastUpdated: string;
 }
 
@@ -63,8 +63,8 @@ export async function saveDraws(newDraws: Draw[]): Promise<number> {
   // Save draws
   await db.doc(DRAWS_DOC).set({ items: merged });
 
-  // Pre-compute and cache analysis
-  const analysis = analyze(merged);
+  // Pre-compute and cache extended analysis
+  const analysis = analyzeExtended(merged);
   await db.doc(CACHE_DOC).set({
     analysis,
     lastUpdated: new Date().toISOString(),
