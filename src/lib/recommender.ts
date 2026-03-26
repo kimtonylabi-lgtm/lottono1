@@ -5,6 +5,7 @@ export interface RecommendOptions {
   strategy?: Strategy;
   count?: number;
   seed?: number;
+  previousNumbers?: number[];
 }
 
 const WEIGHTS: Record<Strategy, { freq: number; recent: number; cold: number; range: number; random: number }> = {
@@ -74,46 +75,74 @@ export function recommend(
     return { ...stat, score, reasons };
   });
 
-  scored.sort((a, b) => b.score - a.score);
+  // Apply penalty for previously recommended numbers
+  if (options.previousNumbers && options.previousNumbers.length > 0) {
+    const penaltySet = new Set(options.previousNumbers);
+    for (const s of scored) {
+      if (penaltySet.has(s.number)) {
+        s.score *= 0.4;
+        s.reasons.push("중복 회피 감점");
+      }
+    }
+  }
 
-  // Select 6 numbers with constraints
+  // Weighted probability sampling instead of top-6 selection
   const selected: typeof scored = [];
-  const candidates = [...scored];
+  const pool = [...scored];
 
-  for (const candidate of candidates) {
-    if (selected.length >= 6) break;
+  while (selected.length < 6 && pool.length > 0) {
+    // Filter candidates that pass constraints
+    const viable = pool.filter((candidate) => {
+      const currentOdd = selected.filter((s) => s.number % 2 === 1).length;
+      const currentEven = selected.filter((s) => s.number % 2 === 0).length;
+      const isOdd = candidate.number % 2 === 1;
+      if (isOdd && currentOdd >= 4) return false;
+      if (!isOdd && currentEven >= 4) return false;
 
-    const currentOdd = selected.filter((s) => s.number % 2 === 1).length;
-    const currentEven = selected.filter((s) => s.number % 2 === 0).length;
-    const isOdd = candidate.number % 2 === 1;
-    if (isOdd && currentOdd >= 4) continue;
-    if (!isOdd && currentEven >= 4) continue;
+      const currentLow = selected.filter((s) => s.number <= 22).length;
+      const currentHigh = selected.filter((s) => s.number > 22).length;
+      if (candidate.number <= 22 && currentLow >= 4) return false;
+      if (candidate.number > 22 && currentHigh >= 4) return false;
 
-    const currentLow = selected.filter((s) => s.number <= 22).length;
-    const currentHigh = selected.filter((s) => s.number > 22).length;
-    if (candidate.number <= 22 && currentLow >= 4) continue;
-    if (candidate.number > 22 && currentHigh >= 4) continue;
+      const candidateRange = getRange(candidate.number);
+      const sameRange = selected.filter((s) => getRange(s.number) === candidateRange).length;
+      if (sameRange >= 2) return false;
 
-    const candidateRange = getRange(candidate.number);
-    const sameRange = selected.filter((s) => getRange(s.number) === candidateRange).length;
-    if (sameRange >= 2) continue;
+      if (selected.length === 5) {
+        const currentSum = selected.reduce((s, v) => s + v.number, 0) + candidate.number;
+        if (currentSum < 80 || currentSum > 200) return false;
+      }
 
-    // Sum range constraint: target 100-180 (most frequent range)
-    if (selected.length === 5) {
-      const currentSum = selected.reduce((s, v) => s + v.number, 0) + candidate.number;
-      if (currentSum < 80 || currentSum > 200) continue;
+      return true;
+    });
+
+    if (viable.length === 0) break;
+
+    // Convert scores to probabilities and sample
+    const minScore = Math.min(...viable.map((v) => v.score));
+    const shifted = viable.map((v) => ({ ...v, weight: Math.max(v.score - minScore + 1, 0.1) }));
+    const totalWeight = shifted.reduce((sum, v) => sum + v.weight, 0);
+
+    let roll = rng() * totalWeight;
+    let picked = shifted[0];
+    for (const candidate of shifted) {
+      roll -= candidate.weight;
+      if (roll <= 0) {
+        picked = candidate;
+        break;
+      }
     }
 
-    selected.push(candidate);
+    selected.push(picked);
+    const pickedIdx = pool.findIndex((p) => p.number === picked.number);
+    if (pickedIdx >= 0) pool.splice(pickedIdx, 1);
   }
 
   // Fallback fill
   if (selected.length < 6) {
-    for (const candidate of candidates) {
+    for (const candidate of pool) {
       if (selected.length >= 6) break;
-      if (!selected.find((s) => s.number === candidate.number)) {
-        selected.push(candidate);
-      }
+      selected.push(candidate);
     }
   }
 
@@ -156,9 +185,20 @@ export function recommendMultiple(
 ): Recommendation[] {
   const count = Math.min(options.count || 1, 5);
   const baseSeed = options.seed ?? Date.now();
-  return Array.from({ length: count }, (_, i) =>
-    recommend(analysis, { ...options, seed: baseSeed + i * 7919 })
-  );
+  const results: Recommendation[] = [];
+  const usedNumbers: number[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const rec = recommend(analysis, {
+      ...options,
+      seed: baseSeed + i * 7919,
+      previousNumbers: usedNumbers,
+    });
+    results.push(rec);
+    usedNumbers.push(...rec.numbers);
+  }
+
+  return results;
 }
 
 function getRange(n: number): string {
