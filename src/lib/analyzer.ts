@@ -8,6 +8,8 @@ import {
   SumAnalysis,
   CoOccurrence,
   ConsecutivePairStats,
+  EndingDigitStats,
+  DrawPatternStats,
 } from "./types";
 
 const TOTAL_NUMBERS = 45;
@@ -250,6 +252,55 @@ export function analyzeExtended(draws: Draw[]): ExtendedAnalysis {
     })
     .sort((a, b) => b.frequency - a.frequency);
 
+  // Ending digit analysis (0-9)
+  const recentDraws = sorted.slice(-RECENT_ROUNDS);
+  const digitFreq = new Array(10).fill(0);
+  const digitRecentFreq = new Array(10).fill(0);
+  const totalPicks = sorted.length * 6;
+
+  for (const draw of sorted) {
+    for (const n of draw.numbers) {
+      digitFreq[n % 10]++;
+    }
+  }
+  for (const draw of recentDraws) {
+    for (const n of draw.numbers) {
+      digitRecentFreq[n % 10]++;
+    }
+  }
+  const endingDigitStats: EndingDigitStats[] = [];
+  for (let d = 0; d < 10; d++) {
+    endingDigitStats.push({
+      digit: d,
+      frequency: digitFreq[d],
+      percentage: Math.round((digitFreq[d] / totalPicks) * 1000) / 10,
+      recentFrequency: digitRecentFreq[d],
+    });
+  }
+
+  // Range pattern analysis (e.g. "2-1-1-1-1")
+  const patternMap = new Map<string, number>();
+  for (const draw of sorted) {
+    const counts = [0, 0, 0, 0, 0]; // 1-10, 11-20, 21-30, 31-40, 41-45
+    for (const n of draw.numbers) {
+      if (n <= 10) counts[0]++;
+      else if (n <= 20) counts[1]++;
+      else if (n <= 30) counts[2]++;
+      else if (n <= 40) counts[3]++;
+      else counts[4]++;
+    }
+    const pattern = counts.join("-");
+    patternMap.set(pattern, (patternMap.get(pattern) || 0) + 1);
+  }
+  const drawPatternStats: DrawPatternStats[] = Array.from(patternMap.entries())
+    .map(([rangePattern, frequency]) => ({
+      rangePattern,
+      frequency,
+      percentage: Math.round((frequency / sorted.length) * 1000) / 10,
+    }))
+    .sort((a, b) => b.frequency - a.frequency)
+    .slice(0, 20);
+
   return {
     ...base,
     bonusStats,
@@ -257,5 +308,7 @@ export function analyzeExtended(draws: Draw[]): ExtendedAnalysis {
     sumAnalysis,
     topCoOccurrences,
     consecutivePairs,
+    endingDigitStats,
+    drawPatternStats,
   };
 }

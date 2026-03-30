@@ -27,13 +27,28 @@ export async function GET(request: NextRequest) {
       : "balanced";
     const count = Math.max(1, Math.min(countParam, 5));
 
+    // Parse fixed numbers
+    const fixedParam = searchParams.get("fixed") || "";
+    const fixedNumbers = fixedParam
+      ? fixedParam
+          .split(",")
+          .map(Number)
+          .filter((n) => n >= 1 && n <= 45 && !isNaN(n))
+          .filter((n, i, arr) => arr.indexOf(n) === i)
+          .slice(0, 5)
+      : undefined;
+
     if (count === 1) {
-      const recommendation = recommend(cache.analysis, { strategy });
-      return NextResponse.json(recommendation);
+      const recommendation = recommend(cache.analysis, { strategy, fixedNumbers });
+      return NextResponse.json(recommendation, {
+        headers: { "Cache-Control": "private, no-cache" },
+      });
     }
 
-    const recommendations = recommendMultiple(cache.analysis, { strategy, count });
-    return NextResponse.json(recommendations);
+    const recommendations = recommendMultiple(cache.analysis, { strategy, count, fixedNumbers });
+    return NextResponse.json(recommendations, {
+      headers: { "Cache-Control": "private, no-cache" },
+    });
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to generate", message: String(error) },

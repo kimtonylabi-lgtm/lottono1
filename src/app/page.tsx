@@ -9,9 +9,12 @@ import GapAnalysisTable from "@/components/gap-analysis-table";
 import FrequencyChart from "@/components/charts/frequency-chart";
 import SumDistributionChart from "@/components/charts/sum-distribution-chart";
 import CoOccurrenceChart from "@/components/charts/co-occurrence-chart";
+import EndingDigitChart from "@/components/charts/ending-digit-chart";
+import RangePatternChart from "@/components/charts/range-pattern-chart";
 import CrawlButton from "@/components/crawl-button";
 import MainContent from "@/components/main-content";
 import ThemeToggle from "@/components/theme-toggle";
+import LookupTab from "@/components/lookup-tab";
 
 export const revalidate = 3600;
 
@@ -77,8 +80,11 @@ export default async function Home() {
             <FrequencyChart key="freq" stats={analysis.numberStats} />
             {ext && <SumDistributionChart key="sum" sumAnalysis={ext.sumAnalysis} />}
             {ext && <CoOccurrenceChart key="cooc" pairs={ext.topCoOccurrences} />}
+            {ext?.endingDigitStats && <EndingDigitChart key="ending" stats={ext.endingDigitStats} />}
+            {ext?.drawPatternStats && <RangePatternChart key="pattern" patterns={ext.drawPatternStats} />}
           </>
         }
+        lookupTab={<LookupTab />}
         footer={
           <CrawlButton lastRound={analysis.latestRound} />
         }

@@ -6,6 +6,7 @@ const tabList = [
   { id: "recommend", label: "추천" },
   { id: "analysis", label: "분석" },
   { id: "charts", label: "차트" },
+  { id: "lookup", label: "조회" },
 ] as const;
 
 type TabId = (typeof tabList)[number]["id"];
@@ -14,6 +15,7 @@ interface MainContentProps {
   recommendTab: ReactNode;
   analysisTab: ReactNode;
   chartsTab: ReactNode;
+  lookupTab: ReactNode;
   footer: ReactNode;
 }
 
@@ -21,6 +23,7 @@ export default function MainContent({
   recommendTab,
   analysisTab,
   chartsTab,
+  lookupTab,
   footer,
 }: MainContentProps) {
   const [activeTab, setActiveTab] = useState<TabId>("recommend");
@@ -28,7 +31,8 @@ export default function MainContent({
   let content: ReactNode;
   if (activeTab === "recommend") content = recommendTab;
   else if (activeTab === "analysis") content = analysisTab;
-  else content = chartsTab;
+  else if (activeTab === "charts") content = chartsTab;
+  else content = lookupTab;
 
   return (
     <>

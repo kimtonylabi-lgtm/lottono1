@@ -59,12 +59,38 @@ export interface AnalysisResult {
   analyzedAt: string;
 }
 
+export interface EndingDigitStats {
+  digit: number;
+  frequency: number;
+  percentage: number;
+  recentFrequency: number;
+}
+
+export interface DrawPatternStats {
+  rangePattern: string;
+  frequency: number;
+  percentage: number;
+}
+
+export interface MatchResult {
+  round: number;
+  date: string;
+  drawNumbers: number[];
+  bonus: number;
+  matchedNumbers: number[];
+  matchedBonus: boolean;
+  matchCount: number;
+  rank: 1 | 2 | 3 | 4 | 5 | null;
+}
+
 export interface ExtendedAnalysis extends AnalysisResult {
   bonusStats: BonusStats[];
   gapAnalysis: GapAnalysis[];
   sumAnalysis: SumAnalysis;
   topCoOccurrences: CoOccurrence[];
   consecutivePairs: ConsecutivePairStats[];
+  endingDigitStats?: EndingDigitStats[];
+  drawPatternStats?: DrawPatternStats[];
 }
 
 export type Strategy = "balanced" | "aggressive" | "conservative";

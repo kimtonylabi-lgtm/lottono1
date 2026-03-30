@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { Recommendation, Strategy } from "@/lib/types";
 import LottoBall from "./lotto-ball";
 import LottoMachine from "./lotto-machine";
+import NumberGrid from "./number-grid";
 
 interface RecommendationCardProps {
   initial: Recommendation;
@@ -25,6 +26,8 @@ export default function RecommendationCard({
   const [drawing, setDrawing] = useState(false);
   const [pendingRecs, setPendingRecs] = useState<Recommendation[] | null>(null);
   const [showResult, setShowResult] = useState(true);
+  const [fixedNumbers, setFixedNumbers] = useState<number[]>([]);
+  const [showFixed, setShowFixed] = useState(false);
 
   const rec = recs[activeIdx] ?? recs[0];
   const { numbers, reasons, basedOnRound, generatedAt, sumTotal } = rec;
@@ -32,12 +35,26 @@ export default function RecommendationCard({
   // The numbers to feed into the machine animation (sorted for display)
   const drawingNumbers = pendingRecs ? pendingRecs[0].numbers : numbers;
 
+  function buildUrl(count: number) {
+    let url = `/api/recommend?strategy=${strategy}&count=${count}`;
+    if (fixedNumbers.length > 0) {
+      url += `&fixed=${fixedNumbers.join(",")}`;
+    }
+    return url;
+  }
+
+  function handleFixedToggle(n: number) {
+    setFixedNumbers((prev) =>
+      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]
+    );
+  }
+
   async function handleDraw() {
     setLoading(true);
     setShowResult(false);
     try {
       const count = Math.max(recs.length, 1);
-      const res = await fetch(`/api/recommend?strategy=${strategy}&count=${count}`);
+      const res = await fetch(buildUrl(count));
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       const results: Recommendation[] = Array.isArray(data) ? data : [data];
@@ -63,7 +80,7 @@ export default function RecommendationCard({
   function addSet() {
     setLoading(true);
     setShowResult(false);
-    fetch(`/api/recommend?strategy=${strategy}&count=${recs.length + 1}`)
+    fetch(buildUrl(recs.length + 1))
       .then((res) => res.json())
       .then((data) => {
         const results: Recommendation[] = Array.isArray(data) ? data : [data];
@@ -103,6 +120,47 @@ export default function RecommendationCard({
             {s.label}
           </button>
         ))}
+      </div>
+
+      {/* Fixed numbers */}
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={() => setShowFixed(!showFixed)}
+          className="flex items-center gap-1 text-xs font-semibold text-[var(--color-muted)] hover:text-[var(--color-foreground)] transition mb-2"
+        >
+          <span>{showFixed ? "▼" : "▶"}</span>
+          <span>고정번호 설정</span>
+          {fixedNumbers.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 bg-blue-500 text-white rounded-full text-[10px]">
+              {fixedNumbers.length}
+            </span>
+          )}
+        </button>
+        {showFixed && (
+          <div className="animate-fade-in">
+            <NumberGrid
+              selected={fixedNumbers}
+              onToggle={handleFixedToggle}
+              maxSelect={5}
+              disabled={drawing}
+            />
+            {fixedNumbers.length > 0 && (
+              <div className="flex items-center gap-1.5 mt-2">
+                <span className="text-[10px] text-[var(--color-muted)]">고정:</span>
+                {fixedNumbers.sort((a, b) => a - b).map((n) => (
+                  <LottoBall key={n} number={n} size="sm" />
+                ))}
+                <button
+                  onClick={() => setFixedNumbers([])}
+                  className="ml-auto text-[10px] text-[var(--color-muted)] hover:text-red-500 transition"
+                >
+                  초기화
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Set tabs */}
@@ -150,7 +208,14 @@ export default function RecommendationCard({
 
           <div key={`balls-${activeIdx}-${generatedAt}`} className="flex justify-center gap-3 mb-6">
             {numbers.map((n, i) => (
-              <LottoBall key={n} number={n} size="lg" delay={i * 80} />
+              <div key={n} className="relative">
+                <LottoBall number={n} size="lg" delay={i * 80} />
+                {reasons[n] === "고정번호" && (
+                  <span className="absolute -top-1 -right-1 text-[10px] bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
+                    P
+                  </span>
+                )}
+              </div>
             ))}
           </div>
 
@@ -159,7 +224,9 @@ export default function RecommendationCard({
             {numbers.map((n) => (
               <div key={n} className="flex items-center gap-2 text-sm">
                 <LottoBall number={n} size="sm" />
-                <span className="text-[var(--color-muted)] text-xs">{reasons[n]}</span>
+                <span className="text-[var(--color-muted)] text-xs">
+                  {reasons[n] === "고정번호" ? "📌 고정번호" : reasons[n]}
+                </span>
               </div>
             ))}
           </div>

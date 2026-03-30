@@ -6,6 +6,7 @@ export interface RecommendOptions {
   count?: number;
   seed?: number;
   previousNumbers?: number[];
+  fixedNumbers?: number[];
 }
 
 const WEIGHTS: Record<Strategy, { freq: number; recent: number; cold: number; range: number; random: number }> = {
@@ -86,9 +87,22 @@ export function recommend(
     }
   }
 
-  // Weighted probability sampling instead of top-6 selection
+  // Pre-seed with fixed numbers
   const selected: typeof scored = [];
   const pool = [...scored];
+
+  if (options.fixedNumbers && options.fixedNumbers.length > 0) {
+    const fixedSet = new Set(options.fixedNumbers.filter((n) => n >= 1 && n <= 45));
+    for (const num of fixedSet) {
+      const idx = pool.findIndex((s) => s.number === num);
+      if (idx >= 0) {
+        const entry = pool[idx];
+        entry.reasons = ["고정번호"];
+        selected.push(entry);
+        pool.splice(idx, 1);
+      }
+    }
+  }
 
   while (selected.length < 6 && pool.length > 0) {
     // Filter candidates that pass constraints
