@@ -93,7 +93,7 @@ export default function RecommendationCard({
   }
 
   return (
-    <div className="bg-[var(--color-card)] rounded-2xl shadow-lg p-6 border border-[var(--color-card-border)] animate-slide-up">
+    <div className="bg-[var(--color-card)] rounded-2xl shadow-lg p-4 sm:p-6 border border-[var(--color-card-border)] animate-slide-up">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-bold text-[var(--color-foreground)]">AI 추천 번호</h2>
         <button
@@ -206,7 +206,7 @@ export default function RecommendationCard({
             {basedOnRound}회차 기준 | 합계: {sumTotal}
           </p>
 
-          <div key={`balls-${activeIdx}-${generatedAt}`} className="flex justify-center gap-3 mb-6">
+          <div key={`balls-${activeIdx}-${generatedAt}`} className="flex justify-center gap-2 sm:gap-3 mb-6">
             {numbers.map((n, i) => (
               <div key={n} className="relative">
                 <LottoBall number={n} size="lg" delay={i * 80} />

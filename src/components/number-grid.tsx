@@ -33,7 +33,7 @@ export default function NumberGrid({
   const isFull = selected.length >= maxSelect;
 
   return (
-    <div className="grid grid-cols-9 gap-1">
+    <div className="grid grid-cols-9 gap-0.5 sm:gap-1">
       {Array.from({ length: 45 }, (_, i) => i + 1).map((n) => {
         const isSelected = selectedSet.has(n);
         const color = getColorGroup(n);
@@ -45,7 +45,7 @@ export default function NumberGrid({
             type="button"
             onClick={() => !isDisabled && onToggle(n)}
             disabled={isDisabled}
-            className={`w-9 h-9 rounded-full text-xs font-bold transition-all ${
+            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full text-[11px] sm:text-xs font-bold transition-all ${
               isSelected
                 ? `ring-2 ${color.ring} scale-110 text-white shadow-md`
                 : isDisabled

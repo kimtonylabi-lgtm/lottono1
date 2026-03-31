@@ -37,9 +37,9 @@ function getBallTheme(n: number): BallTheme {
 }
 
 const sizeClasses = {
-  sm: "w-8 h-8 text-sm",
-  md: "w-12 h-12 text-lg",
-  lg: "w-16 h-16 text-2xl",
+  sm: "w-7 h-7 text-xs sm:w-8 sm:h-8 sm:text-sm",
+  md: "w-10 h-10 text-base sm:w-12 sm:h-12 sm:text-lg",
+  lg: "w-11 h-11 text-lg sm:w-14 sm:h-14 sm:text-2xl",
 };
 
 export default function LottoBall({ number, size = "md", delay = 0 }: LottoBallProps) {
