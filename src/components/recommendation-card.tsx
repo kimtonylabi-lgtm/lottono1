@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Recommendation, Strategy } from "@/lib/types";
+import { addPurchasedSet, isPurchased, removePurchasedSet, getPurchasedSets } from "@/lib/purchased-store";
 import LottoBall from "./lotto-ball";
 import LottoMachine from "./lotto-machine";
 import NumberGrid from "./number-grid";
@@ -28,6 +29,26 @@ export default function RecommendationCard({
   const [showResult, setShowResult] = useState(true);
   const [fixedNumbers, setFixedNumbers] = useState<number[]>([]);
   const [showFixed, setShowFixed] = useState(false);
+  const [purchasedKeys, setPurchasedKeys] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const saved = getPurchasedSets();
+    const keys = new Set(saved.map((s) => s.numbers.join(",")));
+    setPurchasedKeys(keys);
+  }, []);
+
+  function togglePurchase(nums: number[], strat: string) {
+    const key = [...nums].sort((a, b) => a - b).join(",");
+    if (purchasedKeys.has(key)) {
+      const all = getPurchasedSets();
+      const target = all.find((s) => s.numbers.join(",") === key);
+      if (target) removePurchasedSet(target.id);
+      setPurchasedKeys((prev) => { const next = new Set(prev); next.delete(key); return next; });
+    } else {
+      addPurchasedSet(nums, strat);
+      setPurchasedKeys((prev) => new Set(prev).add(key));
+    }
+  }
 
   const rec = recs[activeIdx] ?? recs[0];
   const { numbers, reasons, basedOnRound, generatedAt, sumTotal } = rec;
@@ -241,6 +262,18 @@ export default function RecommendationCard({
                 + 세트 추가
               </button>
             )}
+            <button
+              onClick={() => togglePurchase(numbers, strategy)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+                purchasedKeys.has([...numbers].sort((a, b) => a - b).join(","))
+                  ? "bg-green-500 text-white hover:bg-green-600"
+                  : "bg-[var(--color-surface)] text-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+              }`}
+            >
+              {purchasedKeys.has([...numbers].sort((a, b) => a - b).join(","))
+                ? "구매 완료"
+                : "구매 등록"}
+            </button>
             <p className="text-xs text-[var(--color-muted-light)] text-right ml-auto">
               {new Date(generatedAt).toLocaleString("ko-KR")}
             </p>
