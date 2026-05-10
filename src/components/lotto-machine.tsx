@@ -17,7 +17,6 @@ interface LottoMachineProps {
   onComplete: () => void;
 }
 
-// Globe (circular dome) parameters
 const GLOBE_RADIUS = 110;
 const GLOBE_CX = GLOBE_RADIUS;
 const GLOBE_CY = GLOBE_RADIUS;
@@ -37,6 +36,16 @@ function getTextColor(n: number): string {
   return "#fff";
 }
 
+function vibrate(pattern: number | number[]) {
+  try {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(pattern);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export default function LottoMachine({ targetNumbers, onComplete }: LottoMachineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
@@ -44,11 +53,13 @@ export default function LottoMachine({ targetNumbers, onComplete }: LottoMachine
   const [ballsReady, setBallsReady] = useState(false);
   const [drawnBalls, setDrawnBalls] = useState<number[]>([]);
   const [phase, setPhase] = useState<"mixing" | "drawing" | "done">("mixing");
+  const [highlightedNum, setHighlightedNum] = useState<number | null>(null);
   const [exitingBall, setExitingBall] = useState<number | null>(null);
+  const [shaking, setShaking] = useState(false);
   const drawIndexRef = useRef(0);
   const frameCountRef = useRef(0);
 
-  // Initialize balls inside circular globe
+  // Initialize balls
   useEffect(() => {
     const allNumbers = Array.from({ length: 45 }, (_, i) => i + 1);
     for (let i = allNumbers.length - 1; i > 0; i--) {
@@ -66,7 +77,6 @@ export default function LottoMachine({ targetNumbers, onComplete }: LottoMachine
       [displayNumbers[i], displayNumbers[j]] = [displayNumbers[j], displayNumbers[i]];
     }
 
-    // Place balls randomly inside circle
     ballsRef.current = displayNumbers.map((num, id) => {
       const angle = Math.random() * Math.PI * 2;
       const r = Math.random() * (GLOBE_RADIUS - BALL_R - 10);
@@ -97,36 +107,30 @@ export default function LottoMachine({ targetNumbers, onComplete }: LottoMachine
     for (const ball of balls) {
       if (ball.drawn) continue;
 
-      // Apply gravity (lighter during mixing for more energetic bouncing)
       ball.vy += (isMixing ? GRAVITY * 0.6 : GRAVITY) * speed;
 
       ball.x += ball.vx * speed;
       ball.y += ball.vy * speed;
 
-      // Circular boundary collision
       const dx = ball.x - GLOBE_CX;
       const dy = ball.y - GLOBE_CY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const maxDist = GLOBE_RADIUS - BALL_R;
 
       if (dist > maxDist) {
-        // Push ball back inside
         const nx = dx / dist;
         const ny = dy / dist;
         ball.x = GLOBE_CX + nx * maxDist;
         ball.y = GLOBE_CY + ny * maxDist;
 
-        // Reflect velocity along the normal
         const dot = ball.vx * nx + ball.vy * ny;
         ball.vx -= 2 * dot * nx * 0.7;
         ball.vy -= 2 * dot * ny * 0.7;
       }
 
-      // Random agitation (simulates machine shaking)
       if (frameCountRef.current % 15 === 0) {
         ball.vx += (Math.random() - 0.5) * (isMixing ? 3.5 : 1.0);
         ball.vy += (Math.random() - 0.5) * (isMixing ? 3.0 : 0.8);
-        // Periodic upward kick during mixing (like machine tumbling)
         if (isMixing && frameCountRef.current % 45 === 0) {
           ball.vy -= 2.5 + Math.random() * 2;
           ball.vx += (Math.random() - 0.5) * 3;
@@ -171,50 +175,83 @@ export default function LottoMachine({ targetNumbers, onComplete }: LottoMachine
       for (let i = 0; i < balls.length; i++) {
         const el = children[i] as HTMLElement;
         if (!el) continue;
-        if (balls[i].drawn) {
+        const ball = balls[i];
+        if (ball.drawn) {
           el.style.display = "none";
+          continue;
+        }
+        const isHighlighted = highlightedNum === ball.number;
+        const scale = isHighlighted ? 1.6 : 1;
+        el.style.transform = `translate(${ball.x - BALL_R}px, ${ball.y - BALL_R}px) scale(${scale})`;
+        el.style.zIndex = isHighlighted ? "5" : "1";
+        if (isHighlighted) {
+          el.style.animation = "ball-glow 0.5s ease-in-out infinite";
         } else {
-          el.style.transform = `translate(${balls[i].x - BALL_R}px, ${balls[i].y - BALL_R}px)`;
+          el.style.animation = "";
         }
       }
     }
 
     animRef.current = requestAnimationFrame(animate);
-  }, [phase]);
+  }, [phase, highlightedNum]);
 
   useEffect(() => {
     animRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animRef.current);
   }, [animate]);
 
-  // Drawing phase
+  // Drawing phase — orchestrate per-ball: highlight → drop → tray
   useEffect(() => {
     if (phase !== "drawing") return;
 
-    const interval = setInterval(() => {
-      const idx = drawIndexRef.current;
-      if (idx >= targetNumbers.length) {
-        clearInterval(interval);
-        setPhase("done");
-        setTimeout(onComplete, 800);
-        return;
-      }
+    let cancelled = false;
 
-      const targetNum = targetNumbers[idx];
-      const ball = ballsRef.current.find((b) => b.number === targetNum);
-      if (ball) ball.drawn = true;
+    async function drawNext() {
+      while (!cancelled && drawIndexRef.current < targetNumbers.length) {
+        const idx = drawIndexRef.current;
+        const targetNum = targetNumbers[idx];
+        const isLast = idx === targetNumbers.length - 1;
 
-      // Show exit animation
-      setExitingBall(targetNum);
-      setTimeout(() => {
+        // Phase A: highlight inside globe
+        const highlightMs = isLast ? 1100 : 500;
+        if (isLast) {
+          setShaking(true);
+          vibrate([80, 40, 80]);
+        }
+        setHighlightedNum(targetNum);
+        await sleep(highlightMs);
+        if (cancelled) return;
+
+        // Phase B: drop out of globe → slot
+        const ball = ballsRef.current.find((b) => b.number === targetNum);
+        if (ball) ball.drawn = true;
+        setHighlightedNum(null);
+        setExitingBall(targetNum);
+        vibrate(isLast ? 200 : 40);
+        await sleep(360);
+        if (cancelled) return;
+
+        // Phase C: ball lands in tray
         setExitingBall(null);
         setDrawnBalls((prev) => [...prev, targetNum]);
-      }, 400);
+        if (isLast) setShaking(false);
+        await sleep(isLast ? 600 : 280);
+        if (cancelled) return;
 
-      drawIndexRef.current++;
-    }, 900);
+        drawIndexRef.current++;
+      }
 
-    return () => clearInterval(interval);
+      if (!cancelled) {
+        setPhase("done");
+        setTimeout(onComplete, 700);
+      }
+    }
+
+    drawNext();
+
+    return () => {
+      cancelled = true;
+    };
   }, [phase, targetNumbers, onComplete]);
 
   const balls = ballsReady ? ballsRef.current : [];
@@ -239,6 +276,7 @@ export default function LottoMachine({ targetNumbers, onComplete }: LottoMachine
             borderRadius: "50%",
             background: "radial-gradient(circle at 40% 35%, rgba(255,255,255,0.95), rgba(240,245,255,0.85) 60%, rgba(200,215,235,0.8))",
             boxShadow: "inset 0 0 30px rgba(0,0,0,0.08), 0 0 0 4px #b91c1c, 0 0 0 7px #991b1b, 0 4px 20px rgba(0,0,0,0.3)",
+            animation: shaking ? "globe-shake 0.45s ease-in-out infinite" : undefined,
           }}
         >
           {/* Glass reflection */}
@@ -260,7 +298,7 @@ export default function LottoMachine({ targetNumbers, onComplete }: LottoMachine
             {balls.map((ball) => (
               <div
                 key={ball.id}
-                className="absolute flex items-center justify-center rounded-full font-bold select-none"
+                className="absolute flex items-center justify-center rounded-full font-bold select-none transition-transform duration-200 ease-out"
                 style={{
                   width: BALL_R * 2,
                   height: BALL_R * 2,
@@ -298,7 +336,7 @@ export default function LottoMachine({ targetNumbers, onComplete }: LottoMachine
         >
           {/* Dispensing slot */}
           <div
-            className="w-12 h-6 rounded-b-lg flex items-center justify-center overflow-hidden"
+            className="w-14 h-9 rounded-b-lg flex items-center justify-center overflow-hidden"
             style={{
               background: "linear-gradient(180deg, #1f2937, #111827)",
               boxShadow: "inset 0 2px 4px rgba(0,0,0,0.5)",
@@ -307,14 +345,19 @@ export default function LottoMachine({ targetNumbers, onComplete }: LottoMachine
             {/* Exiting ball animation */}
             {exitingBall !== null && (
               <div
-                className="animate-scale-in"
+                className="flex items-center justify-center rounded-full font-bold select-none"
                 style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: "50%",
-                  background: `radial-gradient(circle at 35% 30%, rgba(255,255,255,0.5), ${getBallColor(exitingBall)} 55%)`,
+                  width: 28,
+                  height: 28,
+                  fontSize: 12,
+                  background: `radial-gradient(circle at 35% 30%, rgba(255,255,255,0.6), ${getBallColor(exitingBall)} 55%)`,
+                  color: getTextColor(exitingBall),
+                  boxShadow: "0 0 8px rgba(255,255,255,0.5), inset 0 -2px 3px rgba(0,0,0,0.1)",
+                  animation: "ball-drop 0.36s cubic-bezier(0.25, 0.9, 0.4, 1.1) both",
                 }}
-              />
+              >
+                {exitingBall}
+              </div>
             )}
           </div>
 
@@ -325,20 +368,25 @@ export default function LottoMachine({ targetNumbers, onComplete }: LottoMachine
 
       {/* Drawn balls tray */}
       <div className="flex gap-2 mt-4 h-14 items-center justify-center">
-        {drawnBalls.map((n) => (
-          <div key={n} className="animate-scale-in">
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg select-none"
-              style={{
-                background: `radial-gradient(circle at 35% 30%, rgba(255,255,255,0.5), ${getBallColor(n)} 50%)`,
-                color: getTextColor(n),
-                boxShadow: "inset 0 -3px 6px rgba(0,0,0,0.15), 0 3px 10px rgba(0,0,0,0.25)",
-              }}
-            >
-              {n}
+        {drawnBalls.map((n, idx) => {
+          const isFinal = idx === targetNumbers.length - 1;
+          return (
+            <div key={n} className="animate-scale-in">
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg select-none"
+                style={{
+                  background: `radial-gradient(circle at 35% 30%, rgba(255,255,255,0.5), ${getBallColor(n)} 50%)`,
+                  color: getTextColor(n),
+                  boxShadow: isFinal
+                    ? "inset 0 -3px 6px rgba(0,0,0,0.15), 0 0 14px rgba(250,204,21,0.65), 0 3px 10px rgba(0,0,0,0.25)"
+                    : "inset 0 -3px 6px rgba(0,0,0,0.15), 0 3px 10px rgba(0,0,0,0.25)",
+                }}
+              >
+                {n}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {Array.from({ length: 6 - drawnBalls.length }).map((_, i) => (
           <div
             key={`empty-${i}`}
@@ -348,4 +396,8 @@ export default function LottoMachine({ targetNumbers, onComplete }: LottoMachine
       </div>
     </div>
   );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
