@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Recommendation, Strategy } from "@/lib/types";
-import { addPurchasedSet, isPurchased, removePurchasedSet, getPurchasedSets } from "@/lib/purchased-store";
+import { Recommendation } from "@/lib/types";
+import { addPurchasedSet, removePurchasedSet, getPurchasedSets } from "@/lib/purchased-store";
 import LottoBall from "./lotto-ball";
 import LottoMachine from "./lotto-machine";
 import NumberGrid from "./number-grid";
@@ -11,18 +11,11 @@ interface RecommendationCardProps {
   initial: Recommendation;
 }
 
-const strategies: { id: Strategy; label: string }[] = [
-  { id: "conservative", label: "보수적" },
-  { id: "balanced", label: "균형" },
-  { id: "aggressive", label: "공격적" },
-];
-
 export default function RecommendationCard({
   initial,
 }: RecommendationCardProps) {
   const [recs, setRecs] = useState<Recommendation[]>([initial]);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [strategy, setStrategy] = useState<Strategy>("balanced");
   const [loading, setLoading] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const [pendingRecs, setPendingRecs] = useState<Recommendation[] | null>(null);
@@ -37,7 +30,7 @@ export default function RecommendationCard({
     setPurchasedKeys(keys);
   }, []);
 
-  function togglePurchase(nums: number[], strat: string) {
+  function togglePurchase(nums: number[]) {
     const key = [...nums].sort((a, b) => a - b).join(",");
     if (purchasedKeys.has(key)) {
       const all = getPurchasedSets();
@@ -45,19 +38,18 @@ export default function RecommendationCard({
       if (target) removePurchasedSet(target.id);
       setPurchasedKeys((prev) => { const next = new Set(prev); next.delete(key); return next; });
     } else {
-      addPurchasedSet(nums, strat);
+      addPurchasedSet(nums, "");
       setPurchasedKeys((prev) => new Set(prev).add(key));
     }
   }
 
   const rec = recs[activeIdx] ?? recs[0];
-  const { numbers, reasons, basedOnRound, generatedAt, sumTotal } = rec;
+  const { numbers, reasons, generatedAt } = rec;
 
-  // The numbers to feed into the machine animation (sorted for display)
   const drawingNumbers = pendingRecs ? pendingRecs[0].numbers : numbers;
 
   function buildUrl(count: number) {
-    let url = `/api/recommend?strategy=${strategy}&count=${count}`;
+    let url = `/api/recommend?count=${count}`;
     if (fixedNumbers.length > 0) {
       url += `&fixed=${fixedNumbers.join(",")}`;
     }
@@ -115,7 +107,7 @@ export default function RecommendationCard({
 
   return (
     <div className="bg-[var(--color-card)] rounded-2xl shadow-lg p-4 sm:p-6 border border-[var(--color-card-border)] animate-slide-up">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-[var(--color-foreground)]">AI 추천 번호</h2>
         <button
           onClick={handleDraw}
@@ -124,23 +116,6 @@ export default function RecommendationCard({
         >
           {loading ? "분석 중..." : drawing ? "추첨 중..." : "번호 추첨"}
         </button>
-      </div>
-
-      {/* Strategy selector */}
-      <div className="flex bg-[var(--color-surface)] rounded-lg p-0.5 mb-4">
-        {strategies.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => { if (!drawing) setStrategy(s.id); }}
-            className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
-              strategy === s.id
-                ? "bg-blue-500 text-white shadow-sm"
-                : "text-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
       </div>
 
       {/* Fixed numbers */}
@@ -223,11 +198,7 @@ export default function RecommendationCard({
       {/* Result display */}
       {showResult && !drawing && (
         <>
-          <p className="text-sm text-[var(--color-muted)] mb-4">
-            {basedOnRound}회차 기준 | 합계: {sumTotal}
-          </p>
-
-          <div key={`balls-${activeIdx}-${generatedAt}`} className="flex justify-center gap-2 sm:gap-3 mb-6">
+          <div key={`balls-${activeIdx}-${generatedAt}`} className="flex justify-center gap-2 sm:gap-3 mb-4">
             {numbers.map((n, i) => (
               <div key={n} className="relative">
                 <LottoBall number={n} size="lg" delay={i * 80} />
@@ -240,19 +211,7 @@ export default function RecommendationCard({
             ))}
           </div>
 
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-[var(--color-muted)]">선정 근거</h3>
-            {numbers.map((n) => (
-              <div key={n} className="flex items-center gap-2 text-sm">
-                <LottoBall number={n} size="sm" />
-                <span className="text-[var(--color-muted)] text-xs">
-                  {reasons[n] === "고정번호" ? "📌 고정번호" : reasons[n]}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex justify-between items-center mt-4">
+          <div className="flex justify-between items-center">
             {recs.length < 5 && recs.length === 1 && (
               <button
                 onClick={addSet}
@@ -263,7 +222,7 @@ export default function RecommendationCard({
               </button>
             )}
             <button
-              onClick={() => togglePurchase(numbers, strategy)}
+              onClick={() => togglePurchase(numbers)}
               className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
                 purchasedKeys.has([...numbers].sort((a, b) => a - b).join(","))
                   ? "bg-green-500 text-white hover:bg-green-600"

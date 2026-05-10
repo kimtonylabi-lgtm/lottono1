@@ -1,36 +1,85 @@
-import { AnalysisResult, ExtendedAnalysis, Recommendation, Strategy } from "./types";
+import { AnalysisResult, ExtendedAnalysis, Recommendation } from "./types";
 import { seededRandom } from "./seeded-random";
 
 export interface RecommendOptions {
-  strategy?: Strategy;
   count?: number;
   seed?: number;
   previousNumbers?: number[];
   fixedNumbers?: number[];
 }
 
-const WEIGHTS: Record<Strategy, { freq: number; recent: number; cold: number; range: number; random: number }> = {
-  balanced: { freq: 25, recent: 30, cold: 20, range: 15, random: 10 },
-  aggressive: { freq: 15, recent: 45, cold: 10, range: 15, random: 15 },
-  conservative: { freq: 30, recent: 20, cold: 25, range: 20, random: 5 },
+const WEIGHTS = {
+  freq: 25,
+  recent: 30,
+  cold: 20,
+  range: 15,
+  random: 10,
+  bonus: 5,
+  endingDigit: 5,
+  coOccur: 8,
+  pattern: 6,
 };
+
+const SUM_TOLERANCE = 35;
+const SUM_HARD_MIN = 80;
+const SUM_HARD_MAX = 200;
 
 export function recommend(
   analysis: AnalysisResult | ExtendedAnalysis,
   options: RecommendOptions = {}
 ): Recommendation {
-  const { strategy = "balanced", seed } = options;
-  const w = WEIGHTS[strategy];
+  const { seed } = options;
+  const w = WEIGHTS;
   const rng = seededRandom(seed ?? Date.now());
   const { numberStats } = analysis;
 
-  // Check if extended analysis is available
   const extended = "gapAnalysis" in analysis ? (analysis as ExtendedAnalysis) : null;
 
-  // Pre-compute max values once
   const maxFreq = Math.max(...numberStats.map((s) => s.frequency));
   const maxRecent = Math.max(...numberStats.map((s) => s.recentFrequency));
   const maxCold = Math.max(...numberStats.map((s) => s.coldStreak));
+
+  // Bonus stats max (extended only)
+  const maxBonus = extended
+    ? Math.max(...extended.bonusStats.map((b) => b.bonusFrequency))
+    : 0;
+
+  // Ending digit stats max (extended only). digit -> frequency
+  const maxDigitFreq = extended?.endingDigitStats
+    ? Math.max(...extended.endingDigitStats.map((d) => d.frequency))
+    : 0;
+
+  // Top range patterns (top 5) for selection-time guidance
+  const topPatterns = extended?.drawPatternStats
+    ? extended.drawPatternStats
+        .slice()
+        .sort((a, b) => b.frequency - a.frequency)
+        .slice(0, 5)
+        .map((p) => p.rangePattern)
+    : [];
+
+  // Co-occurrence map for fast lookup: number -> Map<partner, count>
+  const coMap = new Map<number, Map<number, number>>();
+  if (extended) {
+    for (const c of extended.topCoOccurrences) {
+      const [a, b] = c.pair;
+      if (!coMap.has(a)) coMap.set(a, new Map());
+      if (!coMap.has(b)) coMap.set(b, new Map());
+      coMap.get(a)!.set(b, c.count);
+      coMap.get(b)!.set(a, c.count);
+    }
+  }
+  const maxCoCount = extended
+    ? Math.max(0, ...extended.topCoOccurrences.map((c) => c.count))
+    : 0;
+
+  // Sum dynamic range based on sumAnalysis (extended only)
+  const sumMin = extended
+    ? Math.max(SUM_HARD_MIN, extended.sumAnalysis.averageSum - SUM_TOLERANCE)
+    : SUM_HARD_MIN;
+  const sumMax = extended
+    ? Math.min(SUM_HARD_MAX, extended.sumAnalysis.averageSum + SUM_TOLERANCE)
+    : SUM_HARD_MAX;
 
   const scored = numberStats.map((stat) => {
     let score = 0;
@@ -60,7 +109,7 @@ export function recommend(
     const rangeScore = (actualRatio / expectedRatio) * w.range;
     score += Math.min(rangeScore, w.range);
 
-    // Factor 5: Gap analysis bonus (if extended data available)
+    // Factor 5: Gap analysis bonus
     if (extended) {
       const gap = extended.gapAnalysis.find((g) => g.number === stat.number);
       if (gap && gap.averageGap > 0 && gap.currentGap > gap.averageGap * 1.3) {
@@ -70,7 +119,29 @@ export function recommend(
       }
     }
 
-    // Factor 6: Seeded randomness
+    // Factor 6: Bonus number frequency
+    if (extended && maxBonus > 0) {
+      const bonus = extended.bonusStats.find((b) => b.number === stat.number);
+      if (bonus) {
+        const bonusScore = (bonus.bonusFrequency / maxBonus) * w.bonus;
+        score += bonusScore;
+        if (bonusScore > w.bonus * 0.75) {
+          reasons.push(`보너스 ${bonus.bonusFrequency}회`);
+        }
+      }
+    }
+
+    // Factor 7: Ending digit frequency
+    if (extended?.endingDigitStats && maxDigitFreq > 0) {
+      const digit = stat.number % 10;
+      const ds = extended.endingDigitStats.find((d) => d.digit === digit);
+      if (ds) {
+        const digitScore = (ds.frequency / maxDigitFreq) * w.endingDigit;
+        score += digitScore;
+      }
+    }
+
+    // Factor 8: Seeded randomness
     score += rng() * w.random;
 
     return { ...stat, score, reasons };
@@ -105,6 +176,8 @@ export function recommend(
   }
 
   while (selected.length < 6 && pool.length > 0) {
+    const remaining = 6 - selected.length;
+
     // Filter candidates that pass constraints
     const viable = pool.filter((candidate) => {
       const currentOdd = selected.filter((s) => s.number % 2 === 1).length;
@@ -124,7 +197,7 @@ export function recommend(
 
       if (selected.length === 5) {
         const currentSum = selected.reduce((s, v) => s + v.number, 0) + candidate.number;
-        if (currentSum < 80 || currentSum > 200) return false;
+        if (currentSum < sumMin || currentSum > sumMax) return false;
       }
 
       return true;
@@ -132,9 +205,48 @@ export function recommend(
 
     if (viable.length === 0) break;
 
-    // Convert scores to probabilities and sample
-    const minScore = Math.min(...viable.map((v) => v.score));
-    const shifted = viable.map((v) => ({ ...v, weight: Math.max(v.score - minScore + 1, 0.1) }));
+    // Dynamic per-round bonus: co-occurrence + pattern
+    const dynamicScored = viable.map((v) => {
+      let dynBonus = 0;
+
+      // Co-occurrence: sum of pair counts with already selected numbers
+      if (extended && maxCoCount > 0 && selected.length > 0) {
+        const partners = coMap.get(v.number);
+        if (partners) {
+          let coTotal = 0;
+          for (const sel of selected) {
+            const c = partners.get(sel.number);
+            if (c) coTotal += c;
+          }
+          if (coTotal > 0) {
+            const normalized = Math.min(coTotal / (maxCoCount * selected.length), 1);
+            dynBonus += normalized * w.coOccur;
+          }
+        }
+      }
+
+      // Range pattern: would picking this candidate yield a top-pattern prefix?
+      if (topPatterns.length > 0 && remaining > 0) {
+        const counts = [0, 0, 0, 0, 0];
+        for (const s of selected) counts[rangeIdx(s.number)]++;
+        counts[rangeIdx(v.number)]++;
+        const prefix = counts.join("-");
+        // partial match: any top pattern that starts to align
+        const matched = topPatterns.some((p) => couldYieldPattern(counts, p));
+        if (matched) {
+          dynBonus += w.pattern;
+          // exact emerging match (final pick) gets the full bonus
+          if (selected.length === 5 && topPatterns.includes(prefix)) {
+            dynBonus += w.pattern * 0.5;
+          }
+        }
+      }
+
+      return { ...v, weight: Math.max(v.score + dynBonus, 0.1) };
+    });
+
+    const minScore = Math.min(...dynamicScored.map((v) => v.weight));
+    const shifted = dynamicScored.map((v) => ({ ...v, weight: Math.max(v.weight - minScore + 1, 0.1) }));
     const totalWeight = shifted.reduce((sum, v) => sum + v.weight, 0);
 
     let roll = rng() * totalWeight;
@@ -167,7 +279,6 @@ export function recommend(
     reasons[s.number] = s.reasons.length > 0 ? s.reasons.join(", ") : "균형 선정";
   }
 
-  // Add co-occurrence info for selected numbers
   if (extended) {
     for (const num of numbers) {
       const coMatches = extended.topCoOccurrences.filter(
@@ -186,7 +297,6 @@ export function recommend(
   return {
     numbers,
     reasons,
-    strategy,
     sumTotal,
     basedOnRound: analysis.latestRound,
     generatedAt: new Date().toISOString(),
@@ -221,4 +331,23 @@ function getRange(n: number): string {
   if (n <= 30) return "21-30";
   if (n <= 40) return "31-40";
   return "41-45";
+}
+
+function rangeIdx(n: number): number {
+  if (n <= 10) return 0;
+  if (n <= 20) return 1;
+  if (n <= 30) return 2;
+  if (n <= 40) return 3;
+  return 4;
+}
+
+// Returns true if the current partial counts can still produce one of the
+// top patterns by adding more picks (no bucket has already exceeded target).
+function couldYieldPattern(currentCounts: number[], pattern: string): boolean {
+  const target = pattern.split("-").map(Number);
+  if (target.length !== 5) return false;
+  for (let i = 0; i < 5; i++) {
+    if (currentCounts[i] > target[i]) return false;
+  }
+  return true;
 }

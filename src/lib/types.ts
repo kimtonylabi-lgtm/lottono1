@@ -93,12 +93,9 @@ export interface ExtendedAnalysis extends AnalysisResult {
   drawPatternStats?: DrawPatternStats[];
 }
 
-export type Strategy = "balanced" | "aggressive" | "conservative";
-
 export interface Recommendation {
   numbers: number[];
   reasons: Record<number, string>;
-  strategy: Strategy;
   sumTotal: number;
   basedOnRound: number;
   generatedAt: string;
