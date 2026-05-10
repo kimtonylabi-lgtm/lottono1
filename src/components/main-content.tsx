@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 
 const tabList = [
   { id: "recommend", label: "추천" },
+  { id: "myNumbers", label: "내 번호" },
   { id: "analysis", label: "분석" },
   { id: "charts", label: "차트" },
   { id: "lookup", label: "조회" },
@@ -13,6 +14,7 @@ type TabId = (typeof tabList)[number]["id"];
 
 interface MainContentProps {
   recommendTab: ReactNode;
+  myNumbersTab: ReactNode;
   analysisTab: ReactNode;
   chartsTab: ReactNode;
   lookupTab: ReactNode;
@@ -21,6 +23,7 @@ interface MainContentProps {
 
 export default function MainContent({
   recommendTab,
+  myNumbersTab,
   analysisTab,
   chartsTab,
   lookupTab,
@@ -30,6 +33,7 @@ export default function MainContent({
 
   let content: ReactNode;
   if (activeTab === "recommend") content = recommendTab;
+  else if (activeTab === "myNumbers") content = myNumbersTab;
   else if (activeTab === "analysis") content = analysisTab;
   else if (activeTab === "charts") content = chartsTab;
   else content = lookupTab;

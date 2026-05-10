@@ -15,6 +15,7 @@ import CrawlButton from "@/components/crawl-button";
 import MainContent from "@/components/main-content";
 import ThemeToggle from "@/components/theme-toggle";
 import LookupTab from "@/components/lookup-tab";
+import MyNumbersTab from "@/components/my-numbers-tab";
 
 export const revalidate = 3600;
 
@@ -63,6 +64,7 @@ export default async function Home() {
         recommendTab={
           <RecommendationCard initial={recommendation} />
         }
+        myNumbersTab={<MyNumbersTab />}
         analysisTab={
           <>
             <StatsSummary key="stats" analysis={analysis} />
