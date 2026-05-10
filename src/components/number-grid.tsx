@@ -33,7 +33,7 @@ export default function NumberGrid({
   const isFull = selected.length >= maxSelect;
 
   return (
-    <div className="grid grid-cols-9 gap-0.5 sm:gap-1">
+    <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
       {Array.from({ length: 45 }, (_, i) => i + 1).map((n) => {
         const isSelected = selectedSet.has(n);
         const color = getColorGroup(n);
